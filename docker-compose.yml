@@ -21,10 +21,10 @@ services:
       - "${APP_PORT:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      interval: 10s       # Giảm xuống 10s để kiểm tra nhanh hơn khi chấm bài
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 5s
 
   # PostgreSQL database service
   db:
@@ -39,27 +39,33 @@ services:
     networks:
       - team-internal
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lab05}"]
+      # Sửa cú pháp truyền biến môi trường an toàn trong Docker Compose (dùng $$)
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # AI service mẫu dùng Python HTTP server hoặc FastAPI
   ai-service:
-    image: python:3.11-slim
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Ghi đè lệnh để chạy riêng dịch vụ AI trên cổng 9000
+    command: ["uvicorn", "ai_service.main:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "9000"]
     container_name: fit4110-ai-lab05
-    working_dir: /service
-    volumes:
-      - ./src/ai_service:/service
-    command: ["python", "main.py"]
+    env_file:
+      - .env
+    ports:
+      - "9000:9000" # Mở cổng để bạn có thể test riêng dịch vụ AI từ máy local
     networks:
       - team-internal
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import requests; import sys; sys.exit(0) if requests.get('http://localhost:9000/health').status_code == 200 else sys.exit(1)\""]
-      interval: 30s
+      # Sử dụng lệnh curl từ Dockerfile (đã cài sẵn apk add curl ở bước trước) giúp test cực nhanh và chuẩn xác
+      test: ["CMD", "curl", "-f", "http://localhost:9000/health"]
+      interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 5s
 
 networks:
   team-internal:
